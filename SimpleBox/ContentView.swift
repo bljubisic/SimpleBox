@@ -9,72 +9,58 @@ import SwiftUI
 import CoreData
 
 struct ContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
-
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
-        animation: .default)
-    private var items: FetchedResults<Item>
-
-    var body: some View {
-        List {
-            ForEach(items) { item in
-                Text("Item at \(item.timestamp!, formatter: itemFormatter)")
-            }
-            .onDelete(perform: deleteItems)
-        }
-        .toolbar {
-            #if os(iOS)
-            EditButton()
-            #endif
-
-            Button(action: addItem) {
-                Label("Add Item", systemImage: "plus")
-            }
-        }
+  @State private var fileContent = ""
+  @State private var showDocumentPicker = false
+  
+  var body: some View {
+    VStack {
+      Text(fileContent).padding()
+      
+      Button("Select File") {
+        showDocumentPicker = true
+      }
     }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
-
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
-        }
+    .sheet(isPresented: self.$showDocumentPicker) {
+      DocumentPicker(fileContent: $fileContent)
     }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            offsets.map { items[$0] }.forEach(viewContext.delete)
-
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
-            }
-        }
-    }
+  }
 }
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
-    }
+struct DocumentPicker: UIViewControllerRepresentable {
+  @Binding var fileContent: String
+  
+  func makeCoordinator() -> DocumentPickerCoordinator {
+    return  DocumentPickerCoordinator(fileContent: $fileContent)
+  }
+  
+  func makeUIViewController(context: UIViewControllerRepresentableContext<DocumentPicker>) -> UIDocumentPickerViewController {
+    let controller: UIDocumentPickerViewController
+    
+    controller = UIDocumentPickerViewController(forOpeningContentTypes: [.text], asCopy: true)
+    controller.delegate = context.coordinator
+    return controller
+  }
+  
+  func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: UIViewControllerRepresentableContext<DocumentPicker>) {}
 }
+
+class DocumentPickerCoordinator: NSObject, UIDocumentPickerDelegate, UINavigationControllerDelegate {
+  
+  @Binding var fileContent: String
+  
+  init(fileContent: Binding<String>) {
+    _fileContent = fileContent
+  }
+  
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    let fileURL = urls[0]
+    
+    do {
+      fileContent = try String(contentsOf: fileURL, encoding: .utf8)
+    } catch let error {
+      print(error.localizedDescription)
+    }
+  }
+}
+
+
